@@ -1,10 +1,10 @@
 version: '3.7'
 
 services:
-  eruditus:
+  uetctf-bot:
     build: .
     image: eruditus:latest
-    container_name: eruditus
+    container_name: uetctf-bot
     restart: unless-stopped
     depends_on:
       - mongodb

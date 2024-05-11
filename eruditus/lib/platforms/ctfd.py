@@ -2,11 +2,13 @@ import io
 import logging
 import re
 from datetime import datetime
+from enum import Enum
 from typing import AsyncIterator
 
 import aiohttp
 from bs4 import BeautifulSoup
 
+from config import USER_AGENT
 from lib.platforms.abc import (
     Challenge,
     ChallengeSolver,
@@ -36,6 +38,12 @@ from lib.validators.ctfd import (
 _log = logging.getLogger(__name__)
 
 
+class ChallengeType(str, Enum):
+    dynamic = "dynamic"
+    hidden = "hidden"
+    standard = "standard"
+
+
 class CTFd(PlatformABC):
     name = "CTFd"
 
@@ -56,6 +64,7 @@ class CTFd(PlatformABC):
         async with aiohttp.request(
             method="get",
             url=f"{ctx.url_stripped}/plugins/challenges/assets/view.js",
+            headers={"User-Agent": USER_AGENT()},
         ) as response:
             return "CTFd" in await response.text()
 
@@ -76,7 +85,9 @@ class CTFd(PlatformABC):
 
         # Get the nonce.
         async with aiohttp.request(
-            method="get", url=f"{ctfd_base_url}/login"
+            method="get",
+            url=f"{ctfd_base_url}/login",
+            headers={"User-Agent": USER_AGENT()},
         ) as response:
             cookies = {cookie.key: cookie.value for cookie in response.cookies.values()}
             nonce = BeautifulSoup(await response.text(), "html.parser").find(
@@ -100,6 +111,7 @@ class CTFd(PlatformABC):
             url=f"{ctfd_base_url}/login",
             data=data,
             cookies=cookies,
+            headers={"User-Agent": USER_AGENT()},
             allow_redirects=False,
         ) as response:
             cookies = {cookie.key: cookie.value for cookie in response.cookies.values()}
@@ -128,6 +140,7 @@ class CTFd(PlatformABC):
             method="get",
             url=url,
             cookies=ctx.session.cookies,
+            headers={"User-Agent": USER_AGENT()},
             allow_redirects=False,
         ) as response:
             if response.status != 200:
@@ -161,7 +174,10 @@ class CTFd(PlatformABC):
 
         # Get CSRF token.
         async with aiohttp.request(
-            method="get", url=f"{ctfd_base_url}/challenges", cookies=ctx.session.cookies
+            method="get",
+            url=f"{ctfd_base_url}/challenges",
+            cookies=ctx.session.cookies,
+            headers={"User-Agent": USER_AGENT()},
         ) as response:
             csrf_nonce = re.search(
                 '(?<=csrfNonce\': ")[A-Fa-f0-9]+(?=")', await response.text()
@@ -178,7 +194,7 @@ class CTFd(PlatformABC):
             url=f"{ctfd_base_url}/api/v1/challenges/attempt",
             json=json,
             cookies=ctx.session.cookies,
-            headers={"CSRF-Token": csrf_nonce},
+            headers={"CSRF-Token": csrf_nonce, "User-Agent": USER_AGENT()},
         ) as response:
             # Validate and deserialize response
             data = await deserialize_response(response, model=SubmissionResponse)
@@ -236,6 +252,7 @@ class CTFd(PlatformABC):
             method="get",
             url=f"{ctx.url_stripped}/api/v1/challenges",
             cookies=ctx.session.cookies,
+            headers={"User-Agent": USER_AGENT()},
             allow_redirects=False,
         ) as response:
             # If there's a message instead of challenges
@@ -260,6 +277,9 @@ class CTFd(PlatformABC):
             # Loop through the challenges and get information about each challenge by
             # requesting the `/api/v1/challenges/{challenge_id}` endpoint.
             for chal in data.data:
+                if chal.type == ChallengeType.hidden:
+                    continue
+
                 challenge = await cls.get_challenge(ctx, str(chal.id))
                 if challenge is None:
                     continue
@@ -286,6 +306,7 @@ class CTFd(PlatformABC):
             method="get",
             url=f"{ctx.url_stripped}/api/v1/scoreboard",
             cookies=ctx.session.cookies,
+            headers={"User-Agent": USER_AGENT()},
             allow_redirects=False,
         ) as response:
             # Validate and deserialize response
@@ -323,6 +344,7 @@ class CTFd(PlatformABC):
             method="get",
             url=f"{ctx.url_stripped}/api/v1/scoreboard/top/{count}",
             cookies=ctx.session.cookies,
+            headers={"User-Agent": USER_AGENT()},
             allow_redirects=False,
         ) as response:
             # Validate and deserialize response
@@ -375,7 +397,9 @@ class CTFd(PlatformABC):
 
         # Get the nonce.
         async with aiohttp.request(
-            method="get", url=f"{ctx.url_stripped}/register"
+            method="get",
+            url=f"{ctx.url_stripped}/register",
+            headers={"User-Agent": USER_AGENT()},
         ) as response:
             if response.status != 200:
                 return RegistrationStatus(
@@ -398,6 +422,7 @@ class CTFd(PlatformABC):
                 "_submit": "Submit",
             },
             cookies=cookies,
+            headers={"User-Agent": USER_AGENT()},
             allow_redirects=False,
         ) as response:
             if response.status == 200:
@@ -423,6 +448,7 @@ class CTFd(PlatformABC):
                 method="get",
                 url=f"{ctx.url_stripped}/teams/new",
                 cookies=cookies,
+                headers={"User-Agent": USER_AGENT()},
             ) as teams_resp:
                 nonce = BeautifulSoup(await teams_resp.text(), "html.parser").find(
                     "input", {"id": "nonce"}
@@ -438,6 +464,7 @@ class CTFd(PlatformABC):
                     "nonce": nonce,
                 },
                 cookies=cookies,
+                headers={"User-Agent": USER_AGENT()},
                 allow_redirects=False,
             ) as teams_resp:
                 if teams_resp.status == 200:
@@ -473,6 +500,7 @@ class CTFd(PlatformABC):
             method="get",
             url=f"{ctx.base_url}/api/v1/challenges/{challenge_id}/solves",
             cookies=ctx.session.cookies,
+            headers={"User-Agent": USER_AGENT()},
             allow_redirects=False,
         ) as response:
             # Validate and deserialize response
@@ -503,6 +531,7 @@ class CTFd(PlatformABC):
             method="get",
             url=f"{ctx.base_url}/api/v1/challenges/{challenge_id}",
             cookies=ctx.session.cookies,
+            headers={"User-Agent": USER_AGENT()},
             allow_redirects=False,
         ) as response:
             # Validate and deserialize response
@@ -529,6 +558,7 @@ class CTFd(PlatformABC):
             method="get",
             url=f"{ctx.base_url}/api/v1/teams/me",
             cookies=ctx.session.cookies,
+            headers={"User-Agent": USER_AGENT()},
             allow_redirects=False,
         ) as response:
             # Validate and deserialize response
